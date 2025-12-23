@@ -18,7 +18,7 @@
           <p class="title">Players</p>
           <ul class="nes-list is-disc">
             <li v-for="player in players" :key="player.id">
-              {{ player.name }} 
+              {{ player.name }}
               <span v-if="player.isHost" class="nes-text is-error">(Host)</span>
               <span v-if="player.isReady" class="nes-text is-success"> READY</span>
               <span v-else class="nes-text is-warning"> WAITING</span>
@@ -30,12 +30,21 @@
           <p class="title">Your Options (2 Lies, 1 Truth)</p>
           <div v-for="(opt, index) in myOptions" :key="index" class="field mb-4">
             <label :for="'opt-'+index">Option {{ index + 1 }}</label>
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 30px;">
               <input type="text" :id="'opt-'+index" class="nes-input" v-model="opt.text" placeholder="Something about you...">
-              <label>
-                <input type="radio" class="nes-radio" name="truth" :value="index" v-model="truthIndex" />
-                <span>Truth</span>
-              </label>
+              <button
+                type="button"
+                class="heart-toggle"
+                :aria-pressed="truthIndex === index"
+                @click="setTruth(index)"
+                :title="truthIndex === index ? 'Selected as Truth' : 'Mark as Truth'"
+              >
+                <i
+                  :class="['nes-icon', 'is-large', 'heart', { 'is-empty': truthIndex !== index }]"
+                  aria-hidden="true"
+                ></i>
+                <span class="visually-hidden">{{ truthIndex === index ? 'Truth selected' : 'Mark as truth' }}</span>
+              </button>
             </div>
           </div>
           <button class="nes-btn is-primary" @click="readyUp" :disabled="!canReady">Ready Up</button>
@@ -55,20 +64,20 @@
       <div v-else-if="game.status === 'playing'" class="playing">
         <div class="nes-container with-title is-centered">
           <p class="title">Voting Turn: {{ currentTurnPlayer?.name }}</p>
-          
+
           <div v-if="game.timerEnd" class="mb-4">
             <p class="nes-text is-error">Time Left: {{ timeLeft }}s</p>
           </div>
-          
+
           <div v-if="isMyTurn">
             <p>Your options are being shown! Wait for others to vote.</p>
           </div>
-          
+
           <div v-else>
             <p>Pick the TRUTH:</p>
             <div v-for="(opt, index) in currentTurnPlayer?.options" :key="index" class="mb-4">
-              <button 
-                class="nes-btn is-fullwidth" 
+              <button
+                class="nes-btn is-fullwidth"
                 :class="me?.votedForIndex === index ? 'is-success' : ''"
                 @click="vote(index)"
                 :disabled="me?.votedForIndex !== null && me?.votedForIndex !== undefined"
@@ -217,6 +226,10 @@ async function nextTurn() {
 async function vote(index) {
   await gameService.submitVote(gameId, playerId, index);
 }
+
+function setTruth(index) {
+  truthIndex.value = index;
+}
 </script>
 
 <style scoped>
@@ -234,4 +247,26 @@ async function vote(index) {
 .mt-4 { margin-top: 1rem; }
 .mb-4 { margin-bottom: 1rem; }
 .is-fullwidth { width: 100%; }
+
+/* Heart toggle styles */
+.heart-toggle {
+  border: none;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.heart-toggle:focus {
+  outline: 2px solid #209cee; /* NES.css primary-ish */
+  outline-offset: 2px;
+}
+.visually-hidden {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden;
+  clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap; /* added line */
+}
 </style>

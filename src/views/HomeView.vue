@@ -13,13 +13,13 @@
       </div>
 
       <div class="actions">
-        <button type="button" class="nes-btn is-primary" @click="createNewGame" :disabled="!name">Create New Game</button>
-        <div class="separator">OR</div>
         <div class="field">
           <label for="game_id_field">Game ID</label>
           <input type="text" id="game_id_field" class="nes-input" v-model="gameId" placeholder="Enter Game ID">
         </div>
         <button type="button" class="nes-btn is-success" @click="joinExistingGame" :disabled="!name || !gameId">Join Game</button>
+        <div class="separator">OR</div>
+        <button type="button" class="nes-btn is-primary" @click="createNewGame" :disabled="!name">Create New Game</button>
       </div>
     </div>
   </div>
