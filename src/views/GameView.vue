@@ -14,7 +14,33 @@
 
       <!-- LOBBY -->
       <div v-if="game.status === 'lobby'" class="lobby">
-        <div class="nes-container with-title">
+        <div v-if="!me?.isReady" class="nes-container with-title is-rounded mt-4">
+          <p class="title">Tus opciones</p>
+
+          <div v-for="(opt, index) in myOptions" :key="index" class="field mb-4">
+            <div style="display: flex; align-items: center; gap: 30px;">
+              <label :for="'opt-'+index" style="flex:1;">Opción {{ index + 1 }}</label>
+              <button
+                type="button"
+                class="heart-toggle"
+                :aria-pressed="truthIndex === index"
+                @click="setTruth(index)"
+                :title="truthIndex === index ? 'Selected as Truth' : 'Mark as Truth'"
+              >
+                <i
+                  :class="['nes-icon', 'is-medium', 'heart', { 'is-empty': truthIndex !== index }]"
+                  aria-hidden="true"
+                ></i>
+                <span class="visually-hidden">{{ truthIndex === index ? 'Truth selected' : 'Mark as truth' }}</span>
+              </button>
+            </div>
+            <textarea type="text" :id="'opt-'+index" class="nes-input" v-model="opt.text"
+                      placeholder="Algo sobre ti..."></textarea>
+          </div>
+          <button class="nes-btn is-primary" @click="readyUp" :disabled="!canReady">Listo</button>
+        </div>
+
+        <div class="nes-container with-title mt-4">
           <p class="title">Players</p>
           <ul class="nes-list is-disc">
             <li v-for="player in players" :key="player.id">
@@ -24,30 +50,6 @@
               <span v-else class="nes-text is-warning"> WAITING</span>
             </li>
           </ul>
-        </div>
-
-        <div v-if="!me?.isReady" class="nes-container with-title is-rounded mt-4">
-          <p class="title">Your Options (2 Lies, 1 Truth)</p>
-          <div v-for="(opt, index) in myOptions" :key="index" class="field mb-4">
-            <label :for="'opt-'+index">Option {{ index + 1 }}</label>
-            <div style="display: flex; align-items: center; gap: 30px;">
-              <input type="text" :id="'opt-'+index" class="nes-input" v-model="opt.text" placeholder="Something about you...">
-              <button
-                type="button"
-                class="heart-toggle"
-                :aria-pressed="truthIndex === index"
-                @click="setTruth(index)"
-                :title="truthIndex === index ? 'Selected as Truth' : 'Mark as Truth'"
-              >
-                <i
-                  :class="['nes-icon', 'is-large', 'heart', { 'is-empty': truthIndex !== index }]"
-                  aria-hidden="true"
-                ></i>
-                <span class="visually-hidden">{{ truthIndex === index ? 'Truth selected' : 'Mark as truth' }}</span>
-              </button>
-            </div>
-          </div>
-          <button class="nes-btn is-primary" @click="readyUp" :disabled="!canReady">Ready Up</button>
         </div>
 
         <div v-if="me?.isHost" class="mt-4 nes-container with-title">
@@ -62,19 +64,32 @@
 
       <!-- PLAYING -->
       <div v-else-if="game.status === 'playing'" class="playing">
-        <div class="nes-container with-title is-centered">
-          <p class="title">Voting Turn: {{ currentTurnPlayer?.name }}</p>
+        <div class="nes-container with-title is-centered mt-4">
+          <p class="title">{{ currentTurnPlayer?.name }}</p>
 
           <div v-if="game.timerEnd" class="mb-4">
-            <p class="nes-text is-error">Time Left: {{ timeLeft }}s</p>
+            <p class="nes-text is-error">Resta: {{ timeLeft }}s</p>
+          </div>
+
+          <div v-if="game.showResults" class="results mb-4">
+            <div class="nes-container is-rounded">
+              <p class="nes-text is-success">La verdad era:</p>
+              <p class="nes-text is-success">{{
+                  currentTurnPlayer?.options[truthIndexForCurrentPlayer]?.text }}</p>
+              <p class="nes-text is-primary">{{ correctPercentage }}% le atinaron</p>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <p class="nes-text is-primary">Votos: {{ votesCount }} / {{ totalVoters }}</p>
           </div>
 
           <div v-if="isMyTurn">
-            <p>Your options are being shown! Wait for others to vote.</p>
+            <p>Tus opciones están mostrándose. Espera a que otros voten.</p>
           </div>
 
           <div v-else>
-            <p>Pick the TRUTH:</p>
+            <p>Escoje la VERDAD:</p>
             <div v-for="(opt, index) in currentTurnPlayer?.options" :key="index" class="mb-4">
               <button
                 class="nes-btn is-fullwidth"
@@ -88,7 +103,8 @@
           </div>
 
           <div v-if="me?.isHost" class="mt-4">
-            <button class="nes-btn is-warning" @click="nextTurn">Next Slide / End Game</button>
+            <button v-if="!game.showResults" class="nes-btn is-warning" @click="revealResults">Reveal Results</button>
+            <button v-else class="nes-btn is-warning" @click="nextTurn">Next Slide / End Game</button>
           </div>
         </div>
       </div>
@@ -96,25 +112,33 @@
       <!-- LEADERBOARD -->
       <div v-else-if="game.status === 'leaderboard'" class="leaderboard">
         <div class="nes-container with-title">
-          <p class="title">Final Leaderboard</p>
+          <p class="title">Leaderboard</p>
+          <section class="icon-list is-centered">
+            <i class="nes-icon trophy is-large"></i>
+          </section>
           <div class="nes-table-responsive">
             <table class="nes-table is-bordered is-centered">
               <thead>
                 <tr>
-                  <th>Player</th>
+                  <th>Jugador</th>
                   <th>Score</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="player in sortedPlayers" :key="player.id">
                   <td>{{ player.name }}</td>
-                  <td>{{ player.score }}</td>
+                  <td>
+                    <i class="nes-icon close is-small" v-if="player.score === 0"></i>
+                    <i class="nes-icon coin is-small" v-for="coin in player.score" :key="coin"></i>
+                    <br />
+                    <small>{{ player.score }}</small>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
-        <button class="nes-btn is-primary mt-4" @click="$router.push('/')">Back to Home</button>
+        <button class="nes-btn is-primary mt-4" @click="$router.push('/')">Regresar</button>
       </div>
     </div>
   </div>
@@ -185,6 +209,24 @@ const me = computed(() => players.value.find(p => p.id === playerId));
 const currentTurnPlayer = computed(() => players.value.find(p => p.id === game.value?.currentTurnPlayerId));
 const isMyTurn = computed(() => game.value?.currentTurnPlayerId === playerId);
 
+const votesCount = computed(() => {
+  return players.value.filter(p => p.id !== game.value?.currentTurnPlayerId && p.votedForIndex !== null && p.votedForIndex !== undefined).length;
+});
+
+const totalVoters = computed(() => {
+  return players.value.length - 1;
+});
+
+const truthIndexForCurrentPlayer = computed(() => {
+  return currentTurnPlayer.value?.options.findIndex(o => o.isTruth);
+});
+
+const correctPercentage = computed(() => {
+  if (totalVoters.value === 0) return 0;
+  const correctVotes = players.value.filter(p => p.id !== game.value?.currentTurnPlayerId && p.votedForIndex === truthIndexForCurrentPlayer.value).length;
+  return Math.round((correctVotes / totalVoters.value) * 100);
+});
+
 const canReady = computed(() => {
   return myOptions.value.every(o => o.text.trim() !== '') && truthIndex.value !== null;
 });
@@ -219,6 +261,10 @@ async function startGame() {
   await gameService.startGame(gameId, slideTimer.value);
 }
 
+async function revealResults() {
+  await gameService.revealResults(gameId);
+}
+
 async function nextTurn() {
   await gameService.nextTurn(gameId);
 }
@@ -237,12 +283,6 @@ function setTruth(index) {
   max-width: 800px;
   margin: 2rem auto;
   padding: 0 1rem;
-}
-.game-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
 }
 .mt-4 { margin-top: 1rem; }
 .mb-4 { margin-bottom: 1rem; }

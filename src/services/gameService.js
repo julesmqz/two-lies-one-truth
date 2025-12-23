@@ -89,7 +89,15 @@ export const gameService = {
       currentTurnPlayerId: players[0].id,
       turnIndex: 0,
       slideTimer: slideTimer,
-      timerEnd: slideTimer > 0 ? Date.now() + slideTimer * 1000 : null
+      timerEnd: slideTimer > 0 ? Date.now() + slideTimer * 1000 : null,
+      showResults: false
+    });
+  },
+
+  async revealResults(gameId) {
+    await updateDoc(doc(db, 'games', gameId), {
+      showResults: true,
+      timerEnd: null
     });
   },
 
@@ -123,11 +131,13 @@ export const gameService = {
       batch.update(doc(db, 'games', gameId), {
         currentTurnPlayerId: players[nextIndex].id,
         turnIndex: nextIndex,
-        timerEnd: gameData.slideTimer > 0 ? Date.now() + gameData.slideTimer * 1000 : null
+        timerEnd: gameData.slideTimer > 0 ? Date.now() + gameData.slideTimer * 1000 : null,
+        showResults: false
       });
     } else {
       batch.update(doc(db, 'games', gameId), {
-        status: 'leaderboard'
+        status: 'leaderboard',
+        showResults: false
       });
     }
     

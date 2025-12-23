@@ -1,25 +1,26 @@
 <template>
   <div class="home">
     <header class="header">
-      <h1 class="nes-text is-primary">Two Lies, One Truth</h1>
+      <h1 class="nes-text is-primary">Dos mentiras, Una verdad</h1>
     </header>
 
     <div class="nes-container with-title is-centered">
-      <p class="title">Welcome</p>
+      <p class="title">Bienvenido</p>
       
       <div class="field">
-        <label for="name_field">Your Name</label>
-        <input type="text" id="name_field" class="nes-input" v-model="name" placeholder="Enter your name">
+        <label for="name_field">Tu nombre</label>
+        <input type="text" id="name_field" class="nes-input" v-model="name" placeholder="p.e. Negrito santo">
       </div>
 
       <div class="actions">
         <div class="field">
-          <label for="game_id_field">Game ID</label>
-          <input type="text" id="game_id_field" class="nes-input" v-model="gameId" placeholder="Enter Game ID">
+          <label for="game_id_field">ID Juego</label>
+          <input type="text" id="game_id_field" class="nes-input" v-model="gameId" placeholder="p.e. ED5RFJ2">
         </div>
-        <button type="button" class="nes-btn is-success" @click="joinExistingGame" :disabled="!name || !gameId">Join Game</button>
+        <button type="button" class="nes-btn is-success" @click="joinExistingGame" :disabled="!name || !gameId">Unirse
+        </button>
         <div class="separator">OR</div>
-        <button type="button" class="nes-btn is-primary" @click="createNewGame" :disabled="!name">Create New Game</button>
+        <button type="button" class="nes-btn is-primary" @click="createNewGame" :disabled="!name">Host Game</button>
       </div>
     </div>
   </div>
@@ -46,6 +47,7 @@ async function createNewGame() {
 
 async function joinExistingGame() {
   try {
+    gameId.value = gameId.value.toUpperCase();
     const playerId = await gameService.joinGame(gameId.value, name.value);
     sessionStorage.setItem('playerId', playerId);
     router.push({ name: 'game', params: { id: gameId.value } });
