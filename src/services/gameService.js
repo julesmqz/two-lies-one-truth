@@ -78,6 +78,13 @@ export const gameService = {
     });
   },
 
+  async setNotReady(gameId, playerId) {
+    const playerRef = doc(db, `games/${gameId}/players`, playerId);
+    await updateDoc(playerRef, {
+      isReady: false
+    });
+  },
+
   async startGame(gameId, slideTimer = 0) {
     const playersSnap = await getDocs(collection(db, `games/${gameId}/players`));
     const players = playersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));

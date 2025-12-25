@@ -39,6 +39,7 @@ async function createNewGame() {
   try {
     const { gameId, playerId } = await gameService.createGame(name.value);
     sessionStorage.setItem('playerId', playerId);
+    sessionStorage.setItem('playerName', name.value);
     router.push({ name: 'game', params: { id: gameId } });
   } catch (error) {
     alert('Error creating game: ' + error.message);
@@ -50,6 +51,7 @@ async function joinExistingGame() {
     gameId.value = gameId.value.toUpperCase();
     const playerId = await gameService.joinGame(gameId.value, name.value);
     sessionStorage.setItem('playerId', playerId);
+    sessionStorage.setItem('playerName', name.value);
     router.push({ name: 'game', params: { id: gameId.value } });
   } catch (error) {
     alert('Error joining game: ' + error.message);

@@ -1,5 +1,18 @@
 <template>
   <div class="game-view">
+    <!-- JOIN MODAL -->
+    <div v-if="showJoinModal" class="modal-overlay">
+      <div class="nes-container with-title is-rounded is-centered modal-content">
+        <p class="title">Unirse</p>
+        <p>Ingresa tu nombre:</p>
+        <div class="field mb-4">
+          <input type="text" v-model="newPlayerName" class="nes-input" placeholder="P.e. Negrito Santo"
+                 @keyup.enter="joinGame">
+        </div>
+        <button class="nes-btn is-primary" @click="joinGame" :disabled="!newPlayerName.trim()">Unirse</button>
+      </div>
+    </div>
+
     <div v-if="!game" class="loading">
       <p>Loading game...</p>
     </div>
@@ -14,7 +27,36 @@
 
       <!-- LOBBY -->
       <div v-if="game.status === 'lobby'" class="lobby">
-        <div v-if="!me?.isReady" class="nes-container with-title is-rounded mt-4">
+        <div v-if="editingPlayerId" class="nes-container with-title is-rounded mt-4">
+          <p class="title">Editando a {{ editingPlayerName }}</p>
+
+          <div v-for="(opt, index) in myOptions" :key="index" class="field mb-4">
+            <div style="display: flex; align-items: center; gap: 30px;">
+              <label :for="'opt-'+index" style="flex:1;">Opción {{ index + 1 }}</label>
+              <button
+                type="button"
+                class="heart-toggle"
+                :aria-pressed="truthIndex === index"
+                @click="setTruth(index)"
+                :title="truthIndex === index ? 'Selected as Truth' : 'Mark as Truth'"
+              >
+                <i
+                  :class="['nes-icon', 'is-medium', 'heart', { 'is-empty': truthIndex !== index }]"
+                  aria-hidden="true"
+                ></i>
+                <span class="visually-hidden">{{ truthIndex === index ? 'Truth selected' : 'Mark as truth' }}</span>
+              </button>
+            </div>
+            <textarea type="text" :id="'opt-'+index" class="nes-input" v-model="opt.text"
+                      placeholder="Algo sobre ti..."></textarea>
+          </div>
+          <div class="actions">
+            <button class="nes-btn is-primary" @click="saveOptions" :disabled="!canReady">Guardar</button>
+            <button class="nes-btn" @click="cancelEdit">Cancelar</button>
+          </div>
+        </div>
+
+        <div v-else-if="!me?.isReady" class="nes-container with-title is-rounded mt-4">
           <p class="title">Tus opciones</p>
 
           <div v-for="(opt, index) in myOptions" :key="index" class="field mb-4">
@@ -37,14 +79,22 @@
             <textarea type="text" :id="'opt-'+index" class="nes-input" v-model="opt.text"
                       placeholder="Algo sobre ti..."></textarea>
           </div>
-          <button class="nes-btn is-primary" @click="readyUp" :disabled="!canReady">Listo</button>
+          <div class="actions">
+            <button class="nes-btn is-primary" @click="readyUp" :disabled="!canReady">Listo</button>
+          </div>
         </div>
 
         <div class="nes-container with-title mt-4">
           <p class="title">Players</p>
           <ul class="nes-list is-disc">
             <li v-for="player in players" :key="player.id">
-              {{ player.name }}
+              <span 
+                :class="{ 'clickable-name': canEdit(player) }" 
+                @click="canEdit(player) && startEditing(player)"
+                :title="canEdit(player) ? 'Click to edit' : ''"
+              >
+                {{ player.name }}
+              </span>
               <span v-if="player.isHost" class="nes-text is-error">(Host)</span>
               <span v-if="player.isReady" class="nes-text is-success"> READY</span>
               <span v-else class="nes-text is-warning"> WAITING</span>
@@ -111,7 +161,7 @@
 
       <!-- LEADERBOARD -->
       <div v-else-if="game.status === 'leaderboard'" class="leaderboard">
-        <div class="nes-container with-title">
+        <div class="nes-container with-title mt-4">
           <p class="title">Leaderboard</p>
           <section class="icon-list is-centered">
             <i class="nes-icon trophy is-large"></i>
@@ -128,10 +178,9 @@
                 <tr v-for="player in sortedPlayers" :key="player.id">
                   <td>{{ player.name }}</td>
                   <td>
-                    <i class="nes-icon close is-small" v-if="player.score === 0"></i>
-                    <i class="nes-icon coin is-small" v-for="coin in player.score" :key="coin"></i>
-                    <br />
                     <small>{{ player.score }}</small>
+                    <i class="nes-icon close is-small" v-if="player.score === 0"></i>
+                    <i class="nes-icon coin is-small" v-if="player.score > 0"></i>
                   </td>
                 </tr>
               </tbody>
@@ -145,13 +194,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, onUnmounted } from 'vue';
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { gameService } from '../services/gameService';
 
 const route = useRoute();
 const gameId = route.params.id;
-const playerId = sessionStorage.getItem('playerId');
+const currentPlayerId = ref(sessionStorage.getItem('playerId'));
+const showJoinModal = ref(false);
+const newPlayerName = ref(sessionStorage.getItem('playerName') || '');
 
 const game = ref(null);
 const players = ref([]);
@@ -161,6 +212,7 @@ const myOptions = ref([
   { text: '', isTruth: false }
 ]);
 const truthIndex = ref(null);
+const editingPlayerId = ref(null);
 const slideTimer = ref(30);
 const timeLeft = ref(0);
 let timerInterval = null;
@@ -181,6 +233,46 @@ onMounted(() => {
     players.value = data;
   });
 });
+
+const me = computed(() => players.value.find(p => p.id === currentPlayerId.value));
+
+const isJoining = ref(false);
+
+// If players are loaded and I'm not among them, I need to join
+watch([players, game], ([newPlayers, newGame]) => {
+  if (newGame && newPlayers.length > 0 && !me.value && !showJoinModal.value && !isJoining.value) {
+    if (newPlayerName.value) {
+      joinGame();
+    } else {
+      showJoinModal.value = true;
+    }
+  }
+}, { immediate: true });
+
+// Sync myOptions when me is first loaded and not already editing
+watch(me, (newMe) => {
+  if (newMe && !editingPlayerId.value && !newMe.isReady && myOptions.value.every(o => o.text === '')) {
+    resetToMyOptions();
+  }
+}, { immediate: true });
+
+async function joinGame() {
+  if (!newPlayerName.value.trim()) return;
+  if (isJoining.value) return;
+  isJoining.value = true;
+  try {
+    const id = await gameService.joinGame(gameId, newPlayerName.value.trim());
+    sessionStorage.setItem('playerId', id);
+    sessionStorage.setItem('playerName', newPlayerName.value.trim());
+    currentPlayerId.value = id;
+    showJoinModal.value = false;
+  } catch (error) {
+    console.error('Error joining game:', error);
+    alert('Failed to join game. Please check the Game ID.');
+  } finally {
+    isJoining.value = false;
+  }
+}
 
 onUnmounted(() => {
   if (unsubscribeGame) unsubscribeGame();
@@ -205,9 +297,68 @@ function stopLocalTimer() {
   if (timerInterval) clearInterval(timerInterval);
 }
 
-const me = computed(() => players.value.find(p => p.id === playerId));
+const editingPlayerName = computed(() => {
+  const p = players.value.find(p => p.id === editingPlayerId.value);
+  return p ? p.name : '';
+});
+
+function canEdit(player) {
+  if (!me.value) return false;
+  return me.value.isHost || player.id === currentPlayerId.value;
+}
+
+function startEditing(player) {
+  editingPlayerId.value = player.id;
+  if (player.options && player.options.length === 3) {
+    myOptions.value = player.options.map(o => ({ text: o.text, isTruth: o.isTruth }));
+    truthIndex.value = player.options.findIndex(o => o.isTruth);
+  } else {
+    myOptions.value = [
+      { text: '', isTruth: false },
+      { text: '', isTruth: false },
+      { text: '', isTruth: false }
+    ];
+    truthIndex.value = null;
+  }
+  // If editing someone else (host) or self, we might want to mark them as not ready
+  // to prevent game start, but actually the requirement says "edit after player is ready".
+  // If we don't set isReady to false, the host could start the game while someone is editing.
+  gameService.setNotReady(gameId, player.id);
+}
+
+function cancelEdit() {
+  editingPlayerId.value = null;
+  // Reset myOptions to my own options if I was editing someone else? 
+  // Actually, myOptions is used for the "Ready" form too.
+  resetToMyOptions();
+}
+
+function resetToMyOptions() {
+  if (me.value && me.value.options && me.value.options.length === 3) {
+    myOptions.value = me.value.options.map(o => ({ text: o.text, isTruth: o.isTruth }));
+    truthIndex.value = me.value.options.findIndex(o => o.isTruth);
+  } else {
+    myOptions.value = [
+      { text: '', isTruth: false },
+      { text: '', isTruth: false },
+      { text: '', isTruth: false }
+    ];
+    truthIndex.value = null;
+  }
+}
+
+async function saveOptions() {
+  const options = myOptions.value.map((opt, index) => ({
+    text: opt.text,
+    isTruth: index === truthIndex.value
+  }));
+  await gameService.setReady(gameId, editingPlayerId.value, options);
+  editingPlayerId.value = null;
+  resetToMyOptions();
+}
+
 const currentTurnPlayer = computed(() => players.value.find(p => p.id === game.value?.currentTurnPlayerId));
-const isMyTurn = computed(() => game.value?.currentTurnPlayerId === playerId);
+const isMyTurn = computed(() => game.value?.currentTurnPlayerId === currentPlayerId.value);
 
 const votesCount = computed(() => {
   return players.value.filter(p => p.id !== game.value?.currentTurnPlayerId && p.votedForIndex !== null && p.votedForIndex !== undefined).length;
@@ -254,7 +405,8 @@ async function readyUp() {
     text: opt.text,
     isTruth: index === truthIndex.value
   }));
-  await gameService.setReady(gameId, playerId, options);
+  await gameService.setReady(gameId, currentPlayerId.value, options);
+  editingPlayerId.value = null;
 }
 
 async function startGame() {
@@ -270,7 +422,7 @@ async function nextTurn() {
 }
 
 async function vote(index) {
-  await gameService.submitVote(gameId, playerId, index);
+  await gameService.submitVote(gameId, currentPlayerId.value, index);
 }
 
 function setTruth(index) {
@@ -287,6 +439,38 @@ function setTruth(index) {
 .mt-4 { margin-top: 1rem; }
 .mb-4 { margin-bottom: 1rem; }
 .is-fullwidth { width: 100%; }
+.clickable-name {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.clickable-name:hover {
+  color: #209cee;
+}
+.actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  width: 90%;
+  max-width: 500px;
+}
 
 /* Heart toggle styles */
 .heart-toggle {
